@@ -51,7 +51,7 @@ server and one control node.
 4. Now log into the jepsen-control container...
 
 ```
-docker exec -it jepsen-control bash
+sudo docker exec -it jepsen-control bash
 ```
 
 5. ... and run the tests from there:
