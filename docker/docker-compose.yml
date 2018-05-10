@@ -11,15 +11,13 @@ services:
     links:
       - csync_client
       - csync_server
-    volumes:
-      - /home/vagrant/jepsen/filesync:/jepsen/filesync
   node:
     container_name: jepsen-node
     build: ./node
     env_file: ./secret/node.env
     privileged: true
     volumes:
-      - /home/vagrant/filesync:/filesync
+      - /home/vagrant/filesync/target/debug:/csync/bin
   csync_client:
     extends: node
     container_name: jepsen-csync_client

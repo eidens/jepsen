@@ -1,4 +1,4 @@
-(ns jepsen.filesync
+(ns jepsen.csync
   (:require [clojure.tools.logging :refer :all]
             [clojure.string :as str]
             [jepsen
@@ -14,17 +14,17 @@
             [jepsen.os.debian :as debian]
             [knossos.model :as model]))
 
-(def dir "/csync")
+(def dir "/csync-files")
 (def test-file (str dir "/test"))
 (def pidfile "/csync.pid")
 (def logfile "/csync.log")
-(def binary "/filesync/csync")
+(def binary "/csync/bin/csync")
 (def nodename-client "csync_client")
 (def nodename-server "csync_server")
 (def hostname-server nodename-server)
 
 (defn db
-  "A filesync client for a particular version."
+  "A csync server for a particular version."
   [version]
   (reify db/DB
     (setup! [_ test node]
@@ -79,7 +79,7 @@
 
   (close! [_ test]))
 
-(defn filesync-test
+(defn csync-test
   "Given an options map from the command line runner (e.g. :nodes, :ssh,
   :nconcurrency, ...), constructs a test map."
   [opts]
@@ -103,5 +103,5 @@
   "Handles command line arguments. Can either run a test, or a web
   server for browsing results."
   [& args]
-  (cli/run! (cli/single-test-cmd {:test-fn filesync-test})
+  (cli/run! (cli/single-test-cmd {:test-fn csync-test})
             args))
