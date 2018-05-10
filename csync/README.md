@@ -18,40 +18,51 @@ with that same name on the server.
 Prerequisites: Docker and docker-compose have to be installed and
 a csync executable must be available.
 
-1. Clone this repo: git clone https://github.com/eidens/jepsen.git
+1. Clone this repo:
+
+```
+git clone https://github.com/eidens/jepsen.git
+```
 
 2. Add the folder containing the csync executable in
   docker/docker-compose.yml as a volume to the node containers like
   this:
 
-  volumes:
-    - /path/to/dir/with/csync/binary:/csync/bin
+```
+volumes:
+  - /path/to/dir/with/csync/binary:/csync/bin
+```
 
-  [That path is already configured with a path that works for
-  me. You'll likely have to change that.]
+[That path is already configured with a path that works for me. You'll
+likely have to change that.]
 
-  !! Leave the path in the nodes (i.e. everything after the ':')
-  unchanged. !!
+*Leave the path in the nodes (i.e. everything after the ':')
+unchanged.*
 
-3. Start the docker containers:
+3. Start the docker containers from the jepsen/docker directory:
 
-   [run this from the jepsen/docker directory]
-   sudo ./up.sh
+```
+sudo ./up.sh
+```
 
-   This should start 3 jepsen nodes, one each for a csync client and
-   server and one control node.
+This should start 3 jepsen nodes, one each for a csync client and
+server and one control node.
 
 4. Now log into the jepsen-control container...
 
-   docker exec -it jepsen-control bash
+```
+docker exec -it jepsen-control bash
+```
 
 5. ... and run the tests from there:
 
-   cd csync
-   lein run test -n csync_client -n csync_server
+```
+cd csync
+lein run test -n csync_client -n csync_server
+```
 
-   [the -n options tell jepsen the non-standard node names configured
-   in docker-compose.yml]
+[the -n options tell jepsen the non-standard node names configured in
+docker-compose.yml]
 
 
 Right now this only does a few writes and reads without a nemesis.
