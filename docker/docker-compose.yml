@@ -17,7 +17,7 @@ services:
     env_file: ./secret/node.env
     privileged: true
     volumes:
-      - /home/vagrant/filesync/target/debug:/csync/bin
+      - /home/vagrant/csync/target/debug:/csync/bin
   csync_client:
     extends: node
     container_name: jepsen-csync_client
