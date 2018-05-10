@@ -48,7 +48,7 @@ sudo ./up.sh
 This should start 3 jepsen nodes, one each for a csync client and
 server and one control node.
 
-4. Now log into the jepsen-control container...
+4. Now log into the jepsen-control container from another shell...
 
 ```
 sudo docker exec -it jepsen-control bash
