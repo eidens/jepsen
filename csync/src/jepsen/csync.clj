@@ -22,6 +22,7 @@
 (def nodename-client "csync_client")
 (def nodename-server "csync_server")
 (def hostname-server nodename-server)
+(def port-server 22)
 
 (defn db
   "A csync server for a particular version."
@@ -33,18 +34,19 @@
 
       (c/on nodename-server
             (c/su (c/exec :mkdir :-p dir))
+			(c/exec :touch test-file)
+
+			(c/exec :cd dir)
             (cu/start-daemon!
              {:logfile logfile
               :pidfile pidfile
               :chdir dir}
              binary
-             :--server
-             :--port 22
-             :--dir dir)
-            (c/exec :touch test-file)))
+             :-s
+             :--port port-server)))
 
     (teardown! [_ test node]
-      (info node "tearing down csync client")
+      (info node "tearing down csync node")
       (c/su (c/exec :rm :-rf dir)))
 
     db/LogFiles
@@ -67,8 +69,8 @@
         :write (do (c/on nodename-client
                          ; write value to file on the client
                          (c/exec :echo val :> test-file)
-                         (c/exec binary :--client :--host hostname-server
-                                 :--port 22 :--dir dir))
+                         (c/exec binary :-c :--host hostname-server
+                                 :--port port-server :--dir dir))
                       (assoc op :type :ok))
         :read (assoc op :type :ok,
                      :value (c/on nodename-server
