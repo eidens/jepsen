@@ -19,10 +19,49 @@
 (def pidfile "/csync.pid")
 (def logfile "/csync.log")
 (def binary "/csync/bin/csync")
+
 (def nodename-client "csync_client")
+(def hostname-client nodename-client)
+(def port-client 0)
+
 (def nodename-server "csync_server")
 (def hostname-server nodename-server)
-(def port-server 22)
+(def port-server 2000)
+
+(defn setup-test-dir
+  "Sets up the directory in which csync saves its files."
+  [dir test-file]
+  (info "creating csync directory")
+
+  (c/su (c/exec :mkdir :-p dir)
+        (c/exec :touch test-file)))
+
+(defn start-client
+  "Start the csync client."
+  [remote-host remote-port dir local-host local-port]
+  (info "starting csync server")
+  (c/exec binary
+          :-c
+          :--host remote-host
+          :--port remote-port
+          :--dir dir
+          :--local_host local-host
+          :--local_port local-port))
+
+(defn start-server
+  "Start the csync server."
+  [host port dir]
+  (info "starting csync server")
+
+  (c/exec :cd dir)
+  (cu/start-daemon!
+   {:logfile logfile
+    :pidfile pidfile
+    :chdir dir}
+   binary
+   :-s
+   :--host host
+   :--port port))
 
 (defn db
   "A csync server for a particular version."
@@ -30,20 +69,12 @@
   (reify db/DB
     (setup! [_ test node]
       (info node "installing csync" version)
-      (c/su (c/exec :mkdir :-p dir))
 
-      (c/on nodename-server
-            (c/su (c/exec :mkdir :-p dir))
-			(c/exec :touch test-file)
+      (setup-test-dir dir test-file)
+      (c/exec :echo "" :> logfile)
 
-			(c/exec :cd dir)
-            (cu/start-daemon!
-             {:logfile logfile
-              :pidfile pidfile
-              :chdir dir}
-             binary
-             :-s
-             :--port port-server)))
+      (if (= node nodename-server)
+        (start-server hostname-server port-server dir)))
 
     (teardown! [_ test node]
       (info node "tearing down csync node")
@@ -67,15 +98,22 @@
     (let [val (:value op)]
       (case (:f op)
         :write (do (c/on nodename-client
-                         ; write value to file on the client
+                         ; write the given value to the test file on
+                         ; the client
                          (c/exec :echo val :> test-file)
-                         (c/exec binary :-c :--host hostname-server
-                                 :--port port-server :--dir dir))
+                         ; let the client upload that file to the
+                         ; server
+                         (start-client hostname-server
+                                       port-server
+                                       dir
+                                       hostname-client
+                                       port-client))
                       (assoc op :type :ok))
+
+        ; read the value currently in the test file on the server
         :read (assoc op :type :ok,
                      :value (c/on nodename-server
-                                  (c/exec :cat test-file)))
-        )))
+                                  (c/exec :cat test-file))))))
 
   (teardown! [this test])
 
