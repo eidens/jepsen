@@ -36,7 +36,7 @@
   (c/su (c/exec :mkdir :-p dir)
         (c/exec :touch test-file)))
 
-(defn start-client
+(defn start-csync-client
   "Start the csync client."
   [remote-host remote-port dir local-host local-port]
   (info "starting csync server")
@@ -48,7 +48,7 @@
           :--local_host local-host
           :--local_port local-port))
 
-(defn start-server
+(defn start-csync-server
   "Start the csync server."
   [host port dir]
   (info "starting csync server")
@@ -68,13 +68,26 @@
   [version]
   (reify db/DB
     (setup! [_ test node]
-      (info node "installing csync" version)
+      (info node "setting up csync" version)
 
+      ; Create the directory where 1) the csync server will store the
+      ; files it receives and 2) the csync client will look for files
+      ; to upload to the server.
+      ;
+      ; The csync server currently saves the files it receives at
+      ; exactly the same path as on the client. Therefore this
+      ; directory has to be available on both client and server node.
+      ;
+      ; In the current test setup only one file (test-file) is
+      ; used. This file is also created here.
       (setup-test-dir dir test-file)
+
+      ; reset the log file
       (c/exec :echo "" :> logfile)
 
+      ; start the csync server on its dedicated node
       (if (= node nodename-server)
-        (start-server hostname-server port-server dir)))
+        (start-csync-server hostname-server port-server dir)))
 
     (teardown! [_ test node]
       (info node "tearing down csync node")
@@ -87,6 +100,7 @@
 (defn w [_ _] {:type :invoke, :f :write, :value (rand-int 20)})
 (defn r [_ _] {:type :invoke, :f :read, :value nil})
 
+(def client-lock (Object.))
 (defrecord Client []
   client/Client
   (open! [this test node]
@@ -97,23 +111,32 @@
   (invoke! [_ test op]
     (let [val (:value op)]
       (case (:f op)
-        :write (do (c/on nodename-client
-                         ; write the given value to the test file on
-                         ; the client
-                         (c/exec :echo val :> test-file)
-                         ; let the client upload that file to the
-                         ; server
-                         (start-client hostname-server
-                                       port-server
-                                       dir
-                                       hostname-client
-                                       port-client))
-                      (assoc op :type :ok))
+
+        ; Write the given value to the test file on the client, then
+        ; start the csync client and let it upload the file to the
+        ; server.
+        ;
+        ; Multiple :write operations can be invoked concurrently. But,
+        ; since the implementation always operates on the same file
+        ; and always starts a new csync client, they may not be
+        ; executed concurrently.
+        :write (locking client-lock
+                 (c/on nodename-client
+                       ; write the given value to the test file on the client
+                       (c/exec :echo val :> test-file)
+                       ; let the client upload that file to the server
+                       (start-csync-client hostname-server
+                                           port-server
+                                           dir
+                                           hostname-client
+                                           port-client))
+                 (assoc op :type :ok))
 
         ; read the value currently in the test file on the server
         :read (assoc op :type :ok,
                      :value (c/on nodename-server
-                                  (c/exec :cat test-file))))))
+                                  (c/exec :cat test-file :2>/dev/null
+                                          :|| :echo ""))))))
 
   (teardown! [this test])
 
