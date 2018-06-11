@@ -8,6 +8,8 @@
              [client :as client]
              [db :as db]
              [generator :as gen]
+             [nemesis :as nemesis]
+             [net :as net]
              [tests :as tests]]
             [jepsen.checker.timeline :as timeline]
             [jepsen.control.util :as cu]
@@ -19,6 +21,7 @@
 (def pidfile "/csync.pid")
 (def logfile "/csync.log")
 (def binary "/csync/bin/csync")
+(def initial-value "")
 
 (def nodename-client "csync_client")
 (def hostname-client nodename-client)
@@ -46,7 +49,8 @@
           :--port remote-port
           :--dir dir
           :--local_host local-host
-          :--local_port local-port))
+          :--local_port local-port
+          :--no_file_watching))
 
 (defn start-csync-server
   "Start the csync server."
@@ -62,6 +66,12 @@
    :-s
    :--host host
    :--port port))
+
+(defn stop-csync-server
+  "Stop a csync server."
+  []
+  (info "stopping csync server")
+  (cu/stop-daemon! binary pidfile))
 
 (defn db
   "A csync server for a particular version."
@@ -91,13 +101,15 @@
 
     (teardown! [_ test node]
       (info node "tearing down csync node")
-      (c/su (c/exec :rm :-rf dir)))
+      (c/su (c/exec :rm :-rf dir))
+      (if (= node nodename-server)
+        (stop-csync-server)))
 
     db/LogFiles
     (log-files [_ test node]
             [logfile])))
 
-(defn w [_ _] {:type :invoke, :f :write, :value (rand-int 20)})
+(defn w [_ _] {:type :invoke, :f :write, :value (str (rand-int 20))})
 (defn r [_ _] {:type :invoke, :f :read, :value nil})
 
 (def client-lock (Object.))
@@ -136,7 +148,7 @@
         :read (assoc op :type :ok,
                      :value (c/on nodename-server
                                   (c/exec :cat test-file :2>/dev/null
-                                          :|| :echo ""))))))
+                                          :|| :echo initial-value))))))
 
   (teardown! [this test])
 
@@ -149,18 +161,25 @@
   (merge tests/noop-test
          opts
          {:name "csync"
+
+          :net net/iptables
           :os debian/os
-          :db (db"v0.1.0")
+
           :client (Client.)
-          :model (model/register)
+          :db (db"v0.1.0")
+          :model (model/register initial-value)
+          :nemesis nemesis/noop
+
           :checker (checker/compose
                     {:perf      (checker/perf)
                      :linear    (checker/linearizable)
                      :timeline  (timeline/html)})
+
           :generator (->> (gen/mix [r w])
                           (gen/stagger 1)
                           (gen/nemesis nil)
-                          (gen/time-limit 5))}))
+                          (gen/time-limit 5))}
+         opts))
 
 (defn -main
   "Handles command line arguments. Can either run a test, or a web
